@@ -119,7 +119,9 @@ def userbasedrecommendation(userneighbor):
     return pred
 
 def itembasedrecommendation(movieneighbor):
-    pred = np.sum(movieneighbor['rating']*movieneighbor['similarity']) / np.sum(movieneighbor['similarity'])
+    if np.sum(movieneighbor['similarity']) != 0:
+        pred = np.sum(movieneighbor['rating']*movieneighbor['similarity']) / np.sum(movieneighbor['similarity'])
+    else:pred = 3
     return pred
 
 def fusedrecommendation(simfuseneighbor):
@@ -142,21 +144,23 @@ if __name__ == "__main__" :
         movieid = int(row['movieId'])
         userneighbor,movieneighbor,simfuseneighbor = findneighbors\
             (userid,movieid,userbased_similaritymatrix,itembased_similaritymatrix,ratingmatrix,k)
+
+        upred,ipred,fpred = 3,3,3
         if userneighbor.shape[0] != 0:
             upred = userbasedrecommendation(userneighbor)
             userbased_pred.append(upred)
-        else:
-            alpha = 0
+        else:alpha = 0
         if movieneighbor.shape[0] != 0:
             ipred = itembasedrecommendation(movieneighbor)
-        else:
-            beta = 0
-            itembased_pred.append(3)
+        else:beta = 0
         if simfuseneighbor.shape[0] != 0:
             fpred = fusedrecommendation(simfuseneighbor)*(1-alpha)*(1-beta)+\
                     upred*alpha+ipred*beta
 
-        else:fuse_pred.append(3)
+        userbased_pred.append(upred)
+        itembased_pred.append(ipred)
+        fuse_pred.append(fpred)
+
         print('recommandation complete for user',userid,'on movie',movieid,upred,ipred,fpred)
 
 
