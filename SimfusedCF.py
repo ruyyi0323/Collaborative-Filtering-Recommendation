@@ -147,18 +147,17 @@ if __name__ == "__main__" :
             userbased_pred.append(upred)
         else:
             alpha = 0
-            userbased_pred.append(3)
         if movieneighbor.shape[0] != 0:
             ipred = itembasedrecommendation(movieneighbor)
-            itembased_pred.append(ipred)
         else:
             beta = 0
             itembased_pred.append(3)
         if simfuseneighbor.shape[0] != 0:
             fpred = fusedrecommendation(simfuseneighbor)*(1-alpha)*(1-beta)+\
                     upred*alpha+ipred*beta
-            fuse_pred.append(fpred)
-        print('recommandation complete for user',userid,'on movie',movieid)
+
+        else:fuse_pred.append(3)
+        print('recommandation complete for user',userid,'on movie',movieid,upred,ipred,fpred)
 
 
 
