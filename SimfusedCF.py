@@ -1,6 +1,13 @@
 import pandas as pd
 import numpy as np
 
+def initiateparameters():
+    k = 10
+    portion = 0.001
+    weight1, weight2, weight3 = 4, 4, 2
+    weight_all = sum([weight1, weight2, weight3])
+    return k, portion, weight1, weight2, weight3, weight_all
+
 def readfiles():
     ratings = pd.DataFrame.from_csv('/Users/ruyyi/PycharmProjects/CollaborativeFiltering/ratings.csv', index_col=None)
     index = list(range(ratings.shape[0]))
@@ -78,10 +85,12 @@ def findneighbors(userid,movieid,user_similaritymatrix,item_similaritymatrix,rat
                                             'rating' : movieratingvector,
                                             'similarity' : moviesimilarityvector},
                                     index = movieidlist)
-    userneighbor = userneighbor.loc[userneighbor['rating'] != 0].sort_values( by = 'similarity',ascending = False)
+    userneighbor = userneighbor.loc[userneighbor['rating'] != 0].loc[userneighbor['similarity'] != 0].\
+    sort_values( by = 'similarity',ascending = False)
     if userneighbor.shape[0] > k:
         userneighbor = userneighbor.iloc[:k]
-    movieneighbor = movieneighbor.loc[movieneighbor['rating'] != 0].sort_values(by = 'similarity',ascending = False)
+    movieneighbor = movieneighbor.loc[movieneighbor['rating'] != 0].loc[movieneighbor['similarity'] != 0].\
+    sort_values(by = 'similarity',ascending = False)
     if movieneighbor.shape[0] > k:
         movieneighbor = movieneighbor.iloc[:k]
     simfuseneighbor = getfuseneighbor(userid, movieid,
@@ -108,11 +117,11 @@ def getfuseneighbor(userid,movieid,userneighbor,movieneighbor,ratingmx,usimmx,is
     return simfuseneighbor
 
 def initiaterecommendation(testset):
-    k,alpha,beta = 10,0.7,0.7
-    result = testset[['userId','movieId','rating']]
+    result = testset[['userId','movieId','rating']].reset_index()
     #result['userbased_pred'],result['itembased_pred'],result['fuse_pred'] = 0,0,0
     userbased_pred,itembased_pred,fuse_pred = [],[],[]
-    return k,alpha,beta,result,userbased_pred,itembased_pred,fuse_pred
+    return result,userbased_pred,itembased_pred,fuse_pred
+
 
 def userbasedrecommendation(userneighbor):
     pred = np.sum(userneighbor['rating']*userneighbor['similarity']) / np.sum(userneighbor['similarity'])
@@ -128,42 +137,70 @@ def fusedrecommendation(simfuseneighbor):
     pred = np.sum(simfuseneighbor['rating']*simfuseneighbor['similarity']) / np.sum(simfuseneighbor['similarity'])
     return pred
 
+def gettestid(row):
+    userid = int(row['userId'])
+    movieid = int(row['movieId'])
+    return userid,movieid
+
+def getpredscore(w1,w2,w3):
+    upred, ipred, fpred = 3, 3, 3
+    if userneighbor.shape[0] != 0:
+        upred = userbasedrecommendation(userneighbor)
+    else:
+        w1 = 0
+    if movieneighbor.shape[0] != 0:
+        ipred = itembasedrecommendation(movieneighbor)
+    else:
+        w2 = 0
+    if simfuseneighbor.shape[0] != 0:
+        fpred_temp = fusedrecommendation(simfuseneighbor)
+        fpred = upred * (w1 / w_all) + ipred * (w2 / w_all) + fpred_temp * (w3 / w_all)
+    return upred,ipred,fpred
+
+def getresults(upredlist,ipredlist,fpredlist,result):
+    result['userbased_pred'] = pd.Series(upredlist)
+    result['itembased_pred'] = pd.Series(ipredlist)
+    result['fuse_pred'] = pd.Series(fpredlist)
+    error = pd.DataFrame(result['rating'])
+    error['error_upred'] = result['userbased_pred']-result['rating']
+    error['error_ipred'] = result['itembased_pred'] - result['rating']
+    error['error_fpred'] = result['fuse_pred'] - result['rating']
+    return result,error
+
+def getrmse(error):
+    upredrmse = np.sqrt(np.sum(pow(error['error_upred'],2))/error.shape[0])
+    ipredrmse = np.sqrt(np.sum(pow(error['error_upred'], 2)) / error.shape[0])
+    fpredrmse = np.sqrt(np.sum(pow(error['error_fpred'], 2)) / error.shape[0])
+    print('RMSE of all methods userbased %.3f itembased %.3f simfused %.3f '%(upredrmse,ipredrmse,fpredrmse))
+    return error
+
 if __name__ == "__main__" :
+    #read and split datasets
     recordsize, ratings = readfiles()
     usersize, moviesize = basicinfo(ratings)
     ratings = idmodify(usersize,moviesize,ratings)
-    trainset,testset = splitdataset(0.01,recordsize,ratings)
+    k,portion,_,_,_,_ = initiateparameters()
+    trainset,testset = splitdataset(portion,recordsize,ratings)
+
+    #create rating matrix and similarity matrix
     ratingmatrix = createratingmatrix(trainset,usersize,moviesize)
     userbased_similaritymatrix = userbased_createsimilaritymatrix(ratingmatrix)
     itembased_similaritymatrix = itembased_createsimilaritymatrix(ratingmatrix)
 
-    #recommendation start
-    k, alpha, beta, result, userbased_pred, itembased_pred, fuse_pred = initiaterecommendation(testset)
+    #recommendation part
+    result, userbased_pred, itembased_pred, fuse_pred = initiaterecommendation(testset)
     for _, row in result.iterrows():
-        userid = int(row['userId'])
-        movieid = int(row['movieId'])
+        userid,movieid = gettestid(row)
+        _, _, w1, w2, w3, w_all = initiateparameters()
         userneighbor,movieneighbor,simfuseneighbor = findneighbors\
             (userid,movieid,userbased_similaritymatrix,itembased_similaritymatrix,ratingmatrix,k)
-
-        upred,ipred,fpred = 3,3,3
-        if userneighbor.shape[0] != 0:
-            upred = userbasedrecommendation(userneighbor)
-            userbased_pred.append(upred)
-        else:alpha = 0
-        if movieneighbor.shape[0] != 0:
-            ipred = itembasedrecommendation(movieneighbor)
-        else:beta = 0
-        if simfuseneighbor.shape[0] != 0:
-            fpred = fusedrecommendation(simfuseneighbor)*(1-alpha)*(1-beta)+\
-                    upred*alpha+ipred*beta
-
+        upred,ipred,fpred = getpredscore(w1,w2,w3)
         userbased_pred.append(upred)
         itembased_pred.append(ipred)
         fuse_pred.append(fpred)
+        print('recommandation complete for user', userid, 'on movie', movieid,
+              '\t%.2f,%.2f,%.2f' % (upred, ipred, fpred))
 
-        print('recommandation complete for user',userid,'on movie',movieid,upred,ipred,fpred)
-
-
-
-
-    print('done')
+    #analysis result(RMSE calculation)
+    result,error = getresults(userbased_pred,itembased_pred,fuse_pred,result)
+    error = getrmse(error)
