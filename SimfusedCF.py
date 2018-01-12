@@ -9,7 +9,7 @@ def initiateparameters():
     return k, portion, weight1, weight2, weight3, weight_all
 
 def readfiles():
-    ratings = pd.DataFrame.from_csv('/Users/ruyyi/PycharmProjects/CollaborativeFiltering/ratings.csv', index_col=None)
+    ratings = pd.DataFrame.from_csv('/Users/ruyyi/Documents/Gits/SimfusedCF/SimilarityFusedRecommendation/ratings.csv', index_col=None)
     index = list(range(ratings.shape[0]))
     recordsize = max(index)
     ratings['index'] = index
